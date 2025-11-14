@@ -1,0 +1,59 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm infrastructure deletion'
+        required: true
+        type: string
+
+jobs:
+  destroy:
+    name: Destroy AWS Resources
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Verify Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "❌ Destruction cancelled - confirmation text did not match"
+            exit 1
+          fi
+          echo "✅ Confirmation received - proceeding with destroy"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: ppinfra
+        run: npm install
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Destroy with Pulumi
+        working-directory: ppinfra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          pulumi stack select dev
+          pulumi destroy --yes
+
+      - name: Summary
+        run: |
+          echo "### Infrastructure Destroyed! 💥" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All AWS resources have been successfully removed." >> $GITHUB_STEP_SUMMARY

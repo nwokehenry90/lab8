@@ -1,5 +1,5 @@
 config:
   aws:region: us-west-2
-  myworkshop:errorDocument: error.html
-  myworkshop:indexDocument: index.html
-  myworkshop:path: ./www
+  lab8:errorDocument: error.html
+  lab8:indexDocument: index.html
+  lab8:path: ./www
