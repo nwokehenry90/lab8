@@ -1,0 +1,74 @@
+name: Destroy with OIDC
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm infrastructure deletion'
+        required: true
+        type: string
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+jobs:
+  destroy-oidc:
+    name: Destroy AWS Resources using OIDC
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Verify Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "❌ Destruction cancelled - confirmation text did not match"
+            exit 1
+          fi
+          echo "✅ Confirmation received - proceeding with destroy"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: ppinfra
+        run: npm install
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: GitHubActions-Lab8-Destroy-OIDC
+
+      - name: Verify AWS Identity (Proof of OIDC)
+        run: |
+          echo "### OIDC Authentication Successful! 🔐" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**AWS Identity Information:**" >> $GITHUB_STEP_SUMMARY
+          aws sts get-caller-identity >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Authentication Method:** OIDC (Federated Identity)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Destroy with Pulumi using OIDC
+        working-directory: ppinfra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          pulumi stack select dev
+          pulumi destroy --yes
+
+      - name: Summary
+        run: |
+          echo "### Infrastructure Destroyed with OIDC! 💥" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All AWS resources have been successfully removed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **No static AWS credentials were used in this operation**" >> $GITHUB_STEP_SUMMARY
