@@ -1,0 +1,67 @@
+name: Deploy with OIDC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+jobs:
+  deploy-oidc:
+    name: Deploy to AWS using OIDC
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: ppinfra
+        run: npm install
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: GitHubActions-Lab8-OIDC
+
+      - name: Verify AWS Identity (Proof of OIDC)
+        run: |
+          echo "### OIDC Authentication Successful! 🔐" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**AWS Identity Information:**" >> $GITHUB_STEP_SUMMARY
+          aws sts get-caller-identity >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Authentication Method:** OIDC (Federated Identity)" >> $GITHUB_STEP_SUMMARY
+          echo "**Role ARN:** ${{ secrets.AWS_ROLE_ARN }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Deploy with Pulumi using OIDC
+        working-directory: ppinfra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          # Select and deploy stack with OIDC authentication
+          pulumi stack select dev
+          pulumi up --yes
+
+      - name: Export Stack Outputs
+        working-directory: ppinfra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          echo "### Deployment Successful with OIDC! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack Outputs:**" >> $GITHUB_STEP_SUMMARY
+          pulumi stack output --json | jq -r 'to_entries[] | "- **\(.key)**: \(.value)"' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **No static AWS credentials were used in this deployment**" >> $GITHUB_STEP_SUMMARY
